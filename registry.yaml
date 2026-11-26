@@ -1,0 +1,58 @@
+# Config bundle — Quay operator merges this into its generated config.yaml.
+# SUPER_USERS grants the listed accounts full admin access via the UI and API.
+# Add additional overrides here rather than patching operator-managed secrets.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: quay-config-bundle
+  namespace: quay
+stringData:
+  config.yaml: |
+    SUPER_USERS:
+      - quayadmin
+    FEATURE_USER_CREATION: true
+    FEATURE_DIRECT_LOGIN: true
+---
+# QuayRegistry instance — all components managed by the operator.
+#
+# Storage: the `objectstorage` component is set to managed so the operator
+# creates its own ObjectBucketClaim backed by NooBaa / OCS.  No external
+# object store is required.
+#
+# SCC: all operator-managed pods run under restricted-v2 (no root, no
+# privileged containers).  No extra SCC binding is needed; the operator
+# handles its own service accounts.
+apiVersion: quay.redhat.com/v1
+kind: QuayRegistry
+metadata:
+  name: quay
+  namespace: quay
+spec:
+  # Config bundle provides overrides merged into the operator's generated config.
+  configBundleSecret: quay-config-bundle
+  # All components delegated to the operator so no external dependencies
+  # (Postgres, Redis, object storage) need to be provisioned separately.
+  components:
+    - kind: clair
+      managed: true
+    - kind: postgres
+      managed: true
+    - kind: objectstorage
+      managed: true
+    - kind: redis
+      managed: true
+    - kind: horizontalpodautoscaler
+      managed: true
+    - kind: route
+      managed: true
+    - kind: mirror
+      managed: true
+    # monitoring requires AllNamespaces install mode — disabled in OwnNamespace.
+    - kind: monitoring
+      managed: false
+    - kind: tls
+      managed: true
+    - kind: quay
+      managed: true
+    - kind: clairpostgres
+      managed: true

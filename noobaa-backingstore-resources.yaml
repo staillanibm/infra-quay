@@ -1,0 +1,42 @@
+# Fix: NooBaa PV-pool backing-store pod OOMKilled when Quay pushes large images,
+# and single point of failure on the write path.
+#
+# make fix-noobaa (see noobaa-endpoint-resources.yaml) raises the
+# noobaa-endpoint pod (the S3-facing frontend). That is not the only
+# undersized component: the actual write path for a PV-pool backing store
+# goes through the "backing store" agent pod(s)
+# (noobaa-default-backing-store-noobaa-pod-*), which ODF sizes at 400Mi by
+# default. Pushing a large image layer through it OOMKills that pod
+# mid-transfer, which aborts the upload with an unrelated-looking error from
+# skopeo/podman ("writing blob: uploading layer chunked: blob upload
+# invalid") rather than a clear OOM message.
+#
+# Unlike the endpoint (whose spec is owned by StorageCluster and resynced
+# every reconcile — see noobaa-endpoint-resources.yaml), the BackingStore CR
+# is the actual source of truth here: it is owned by the NooBaa CR but
+# nothing resyncs spec.pvPool.resources out from under a direct patch.
+#
+# numVolumes: raising the memory limit alone was not enough — with
+# numVolumes: 1 there is exactly one PV-pool agent pod, and it gets replaced
+# (a clean, non-OOM restart — e.g. following a resource patch, or its own
+# periodic reconnect cycle) often enough that a large multi-minute push can
+# land on top of one of these restarts and lose its connection mid-transfer
+# ("blob upload invalid" with no OOM in the pod's history). Going to 2
+# volumes gives the pool redundancy: while one agent restarts, the other
+# keeps serving in-flight requests. Needs a second 50Gi PVC on the
+# ocs-external-storagecluster-ceph-rbd storage class.
+apiVersion: noobaa.io/v1alpha1
+kind: BackingStore
+metadata:
+  name: noobaa-default-backing-store
+  namespace: openshift-storage
+spec:
+  pvPool:
+    numVolumes: 2
+    resources:
+      limits:
+        cpu: '1'
+        memory: 4Gi
+      requests:
+        cpu: 200m
+        memory: 1Gi

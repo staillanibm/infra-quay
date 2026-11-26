@@ -1,0 +1,44 @@
+# Fix: NooBaa endpoint OOMKilled when Quay pushes large images.
+#
+# The `objectstorage` component is delegated to NooBaa/ODF (see registry.yaml).
+# Every image layer Quay uploads goes through the noobaa-endpoint pod, which
+# buffers S3 multipart upload parts in memory. The ODF default endpoint limit
+# (2Gi) is too small for large image pushes and the pod gets OOMKilled,
+# aborting the push mid-transfer.
+#
+# IMPORTANT: patch the StorageCluster, not the NooBaa CR directly. On this
+# cluster NooBaa (openshift-storage/noobaa) is owned by the StorageCluster
+# (ocs-external-storagecluster) — the ocs-operator resyncs
+# NooBaa.spec.endpoints.resources from StorageCluster.spec.multiCloudGateway
+# on every reconcile (~every 10s) and silently reverts any direct patch to
+# the NooBaa CR within seconds. This file patches
+# spec.multiCloudGateway.endpoints.resources on the StorageCluster instead,
+# which is the actual source of truth the ocs-operator reads from.
+#
+# IMPORTANT #2: the sync from StorageCluster to the NooBaa CR replaces the
+# whole spec.endpoints object rather than merging it. Omitting minCount/
+# maxCount here wipes them from the NooBaa CR (they default to the Go zero
+# value, 0), which makes the noobaa-operator reconcile loop fail hard with
+# "Invalid endpoint min count (must be greater than 0)" and it then refuses
+# to touch the noobaa-endpoint Deployment at all — the resource bump never
+# reaches the running pod. Keep these in lockstep with the current NooBaa
+# CR's spec.endpoints.minCount/maxCount (check with
+# `oc -n openshift-storage get noobaa noobaa -o jsonpath='{.spec.endpoints}'`
+# before changing this file, in case they differ from the defaults below).
+apiVersion: ocs.openshift.io/v1
+kind: StorageCluster
+metadata:
+  name: ocs-external-storagecluster
+  namespace: openshift-storage
+spec:
+  multiCloudGateway:
+    endpoints:
+      minCount: 1
+      maxCount: 2
+      resources:
+        limits:
+          cpu: '2'
+          memory: 8Gi
+        requests:
+          cpu: '1'
+          memory: 4Gi

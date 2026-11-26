@@ -1,0 +1,26 @@
+# OperatorGroup restricts the Quay operator to the quay namespace only
+# (OwnNamespace install mode).
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: quay
+  namespace: quay
+spec:
+  targetNamespaces:
+    - quay
+---
+# Subscription pulls quay-operator from the Red Hat catalog on the stable-3.17
+# channel. Automatic approval means OLM upgrades patch releases without
+# manual intervention; pin installPlanApproval to Manual if you prefer gated
+# upgrades.
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: quay-operator
+  namespace: quay
+spec:
+  channel: stable-3.17
+  name: quay-operator
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic

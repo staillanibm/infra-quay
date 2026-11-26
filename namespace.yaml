@@ -1,0 +1,7 @@
+# Namespace that scopes the Quay operator and registry instance.
+# The operator is installed in OwnNamespace mode, so operator + operand
+# share this namespace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: quay
