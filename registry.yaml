@@ -10,7 +10,8 @@ stringData:
   config.yaml: |
     SUPER_USERS:
       - quayadmin
-    FEATURE_USER_CREATION: true
+    # Self-registration disabled once the quayadmin account exists.
+    FEATURE_USER_CREATION: false
     FEATURE_DIRECT_LOGIN: true
 ---
 # QuayRegistry instance — all components managed by the operator.
